@@ -39,23 +39,25 @@ Main code file: `steganography_cli.py`
 ### 📥 Hide Text in Image
 
 ```bash
-python steganography_cli.py hide -i input.png -t secret.txt -o output.png
+python steganography_cli.py hide -i input.png -t secret.txt -o output.png --password mypass
 ```
 
 - `-i`, `--image`: Path to input image (PNG format recommended)
 - `-t`, `--text`: Path to `.txt` file containing the message to hide
 - `-o`, `--output`: Output image path where text will be hidden
+- `--password`: Password to be used for encryption.
 
 ---
 
 ### 📤 Extract Text from Image
 
 ```bash
-python steganography_cli.py unhide -i output.png -t extracted.txt
+python steganography_cli.py unhide -i output.png -t extracted.txt --password mypass
 ```
 
 - `-i`, `--image`: Image with hidden text
 - `-t`, `--text`: Path to save extracted text file
+- `--password`: Password used to encrytion to decrypt the file.
 
 ---
 
