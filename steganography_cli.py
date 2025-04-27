@@ -1,8 +1,25 @@
 import argparse
+import base64
+import hashlib
 from PIL import Image
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes  # add this import
+
+def derive_key(password: str, salt: bytes = b'stego_salt') -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100_000,
+        backend=default_backend()
+    )
+    return base64.urlsafe_b64encode(kdf.derive(password.encode()))
 
 
-def hide(image_file_path, file_to_hide_path, output_file_path):
+
+def hide(image_file_path, file_to_hide_path, output_file_path, password):
     try:
         with open(file_to_hide_path, "rb") as f:
             content = f.read()
@@ -10,8 +27,12 @@ def hide(image_file_path, file_to_hide_path, output_file_path):
         print(f"Error occurred while reading the file: {e}")
         return
 
+    key = derive_key(password)
+    fernet = Fernet(key)
+    encrypted_content = fernet.encrypt(content)
+
     binary_data = []
-    for byte in content:
+    for byte in encrypted_content:
         b = bin(byte)[2:].zfill(8)
         binary_data.extend(int(bit) for bit in b)
 
@@ -44,7 +65,7 @@ def hide(image_file_path, file_to_hide_path, output_file_path):
     print(f"File hidden successfully in '{output_file_path}'.")
 
 
-def unhide(image_file_path, output_file_path):
+def unhide(image_file_path, output_file_path, password):
     im = Image.open(image_file_path)
     px = im.load()
     binary_data = []
@@ -66,9 +87,17 @@ def unhide(image_file_path, output_file_path):
             byte = (byte << 1) | bit
         byte_array.append(byte)
 
+    key = derive_key(password)
+    fernet = Fernet(key)
+    try:
+        decrypted = fernet.decrypt(bytes(byte_array))
+    except Exception as e:
+        print("Decryption failed: Wrong password or corrupted data.")
+        return
+
     try:
         with open(output_file_path, "wb") as f:
-            f.write(byte_array)
+            f.write(decrypted)
         print(f"Extracted file saved to '{output_file_path}'.")
     except Exception as e:
         print(f"Error writing output file: {e}")
@@ -76,7 +105,7 @@ def unhide(image_file_path, output_file_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Steganography CLI tool to hide and extract any file in/from PNG images."
+        description="Steganography CLI tool to hide and extract any file in/from PNG images using AES encryption."
     )
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -85,18 +114,20 @@ def main():
     hide_parser.add_argument('-i', '--image', required=True, help='Input image path (PNG)')
     hide_parser.add_argument('-t', '--text', required=True, help='File path to hide (any binary file)')
     hide_parser.add_argument('-o', '--output', required=True, help='Output image path')
+    hide_parser.add_argument('--password', required=True, help='Password for encryption')
 
     # unhide command
     unhide_parser = subparsers.add_parser('unhide', help='Extract hidden file from image')
     unhide_parser.add_argument('-i', '--image', required=True, help='Image with hidden file')
     unhide_parser.add_argument('-t', '--text', required=True, help='Path to save extracted file')
+    unhide_parser.add_argument('--password', required=True, help='Password for decryption')
 
     args = parser.parse_args()
 
     if args.command == 'hide':
-        hide(args.image, args.text, args.output)
+        hide(args.image, args.text, args.output, args.password)
     elif args.command == 'unhide':
-        unhide(args.image, args.text)
+        unhide(args.image, args.text, args.password)
 
 
 if __name__ == "__main__":
